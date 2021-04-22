@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+"""
+Small flask server to view map tiles.
+"""
+from gevent import monkey
+monkey.patch_all()
+from gevent.pywsgi import WSGIServer
+from argparse import ArgumentParser
+import importlib.util
+from http import HTTPStatus
+from os import getcwd
+import importlib.util
+import errno
+import os.path
+import sys
+from flask import Flask, send_file, Response, render_template
+
+# Parse Arguments
+parser = ArgumentParser(description="Map Tile Viewer")
+parser.add_argument(
+    "--tile-server",
+    type=str,
+    help="Path to tile server",
+    default="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+)
+parser.add_argument("--port", type=int, help="Port to bind to.", default=9001)
+args = vars(parser.parse_args())
+
+# Try to locate mapviewer folder
+root_path = getcwd() + "/mapserver"
+if not os.path.isdir(root_path):
+    spec_location = importlib.util.find_spec('mapviewer')
+    if spec_location is None or spec_location.origin is None:
+        print("mapviewer folder is not in current directory or installed.")
+        sys.exit(1)
+    root_path = os.path.dirname(spec_location.origin)
+print(root_path)
+
+
+app = Flask(__name__, root_path=root_path)
+
+@app.route('/')
+def index():
+    """Return a sample fullscreen map application."""
+    return render_template("index.html", tile_server=args['tile_server'])
+
+if __name__ == '__main__':
+    try:
+        http_server = WSGIServer(('', args['port']), app)
+        print(f"Starting map server on http://localhost:{args['port']}")
+        http_server.serve_forever()
+    except OSError as e:
+        if e.errno == errno.EADDRINUSE:
+            print("Address-Port Combination in use. Is another servemaps running?")
+            os._exit(errno.EADDRINUSE)
+        raise e
